@@ -2,6 +2,7 @@ from sklearn import tree
 from sklearn import preprocessing
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import mean_absolute_error, f1_score
+from sklearn.model_selection import TimeSeriesSplit
 
 import pandas as pd
 from pandas.api.types import (
@@ -56,8 +57,9 @@ def _calculate_model_cv_score_(
 
     # Cross-validation is stratifiedKFold for classification, KFold for regression
     # CV on one core (n_job=1; default) has shown to be fastest
+    tscv = TimeSeriesSplit(n_splits=cross_validation)
     scores = cross_val_score(
-        model, feature_input, target_series, cv=cross_validation, scoring=metric
+        model, feature_input, target_series, cv=tscv, scoring=metric
     )
 
     return scores.mean()
