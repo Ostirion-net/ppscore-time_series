@@ -1,7 +1,7 @@
 # ppscore - a Python implementation of the Predictive Power Score (PPS)
 
 ### From the makers of [bamboolib - a GUI for pandas DataFrames](https://bamboolib.com)
-
+### Modified for time series split cross validation.
 
 __If you don't know yet what the Predictive Power Score is, please read the following blog post:__
 
