@@ -4,6 +4,9 @@ from sklearn.model_selection import cross_val_score
 from sklearn.metrics import mean_absolute_error, f1_score
 from sklearn.model_selection import TimeSeriesSplit
 
+from sklearn.pipeline import Pipeline
+from sklearn.preprocessing import StandardScaler, MinMaxScaler
+
 import pandas as pd
 from pandas.api.types import (
     is_numeric_dtype,
@@ -126,7 +129,7 @@ VALID_CALCULATIONS = {
         "ppscore": TO_BE_CALCULATED,
         "metric_name": "mean absolute error",
         "metric_key": "neg_mean_absolute_error",
-        "model": tree.DecisionTreeRegressor(),
+        "model": Pipeline([('scaler', StandardScaler()), ('tree', tree.DecisionTreeRegressor())]),
         "score_normalizer": _mae_normalizer,
     },
     "classification": {
@@ -137,7 +140,7 @@ VALID_CALCULATIONS = {
         "ppscore": TO_BE_CALCULATED,
         "metric_name": "weighted F1",
         "metric_key": "f1_weighted",
-        "model": tree.DecisionTreeClassifier(),
+        "model": Pipeline([('scaler', StandardScaler()), ('tree', tree.DecisionTreeClassifier())]),
         "score_normalizer": _f1_normalizer,
     },
     "predict_itself": {
