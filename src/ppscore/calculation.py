@@ -35,7 +35,7 @@ def _calculate_model_cv_score_(
     # if there is a strong pattern in the rows eg 0,0,0,0,1,1,1,1
     # then this will lead to problems because the first cv sees mostly 0 and the later 1
     # this approach might be wrong for timeseries because it might leak information
-    df = df.sample(frac=1, random_state=random_seed, replace=False)
+    # df = df.sample(frac=1, random_state=random_seed, replace=False)
 
     # preprocess target
     if task["type"] == "classification":
