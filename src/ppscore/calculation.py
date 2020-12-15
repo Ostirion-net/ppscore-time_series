@@ -2,10 +2,9 @@ from sklearn import tree
 from sklearn import preprocessing
 from sklearn.model_selection import cross_val_score
 from sklearn.metrics import mean_absolute_error, f1_score
-from sklearn.model_selection import TimeSeriesSplit
 
-from sklearn.pipeline import Pipeline
 from sklearn.preprocessing import StandardScaler, MinMaxScaler
+from sklearn.pipeline import Pipeline
 
 import pandas as pd
 from pandas.api.types import (
@@ -38,7 +37,9 @@ def _calculate_model_cv_score_(
     # if there is a strong pattern in the rows eg 0,0,0,0,1,1,1,1
     # then this will lead to problems because the first cv sees mostly 0 and the later 1
     # this approach might be wrong for timeseries because it might leak information
-    # df = df.sample(frac=1, random_state=random_seed, replace=False)
+    # Fixing the time_series:
+    if not TIME_SERIES:
+        df = df.sample(frac=1, random_state=random_seed, replace=False)
 
     # preprocess target
     if task["type"] == "classification":
@@ -60,9 +61,9 @@ def _calculate_model_cv_score_(
 
     # Cross-validation is stratifiedKFold for classification, KFold for regression
     # CV on one core (n_job=1; default) has shown to be fastest
-    tscv = TimeSeriesSplit(n_splits=cross_validation)
+    
     scores = cross_val_score(
-        model, feature_input, target_series, cv=tscv, scoring=metric
+        model, feature_input, target_series, cv=cross_validation, scoring=metric
     )
 
     return scores.mean()
@@ -119,7 +120,7 @@ def _f1_normalizer(df, y, model_score, random_seed):
     ppscore = _normalized_f1_score(model_score, baseline_score)
     return ppscore, baseline_score
 
-
+TIME_SERIES = False
 VALID_CALCULATIONS = {
     "regression": {
         "type": "regression",
@@ -129,7 +130,7 @@ VALID_CALCULATIONS = {
         "ppscore": TO_BE_CALCULATED,
         "metric_name": "mean absolute error",
         "metric_key": "neg_mean_absolute_error",
-        "model": Pipeline([('scaler', StandardScaler()), ('tree', tree.DecisionTreeRegressor())]),
+        "model": tree.DecisionTreeRegressor(),
         "score_normalizer": _mae_normalizer,
     },
     "classification": {
@@ -140,7 +141,7 @@ VALID_CALCULATIONS = {
         "ppscore": TO_BE_CALCULATED,
         "metric_name": "weighted F1",
         "metric_key": "f1_weighted",
-        "model": Pipeline([('scaler', StandardScaler()), ('tree', tree.DecisionTreeClassifier())]),
+        "model":  tree.DecisionTreeClassifier(),
         "score_normalizer": _f1_normalizer,
     },
     "predict_itself": {
@@ -270,7 +271,6 @@ def _maybe_sample(df, sample, random_seed=None):
     Maybe samples the rows of the given df to have at most `sample` rows
     If sample is `None` or falsy, there will be no sampling.
     If the df has fewer rows than the sample, there will be no sampling.
-
     Parameters
     ----------
     df : pandas.DataFrame
@@ -279,7 +279,6 @@ def _maybe_sample(df, sample, random_seed=None):
         Number of rows to be sampled
     random_seed : int or `None`
         Random seed that is forwarded to pandas.DataFrame.sample as `random_state`
-
     Returns
     -------
     pandas.DataFrame
@@ -343,6 +342,8 @@ def score(
     df,
     x,
     y,
+    pipeline = [],
+    time_series = False,
     task=NOT_SUPPORTED_ANYMORE,
     sample=5_000,
     cross_validation=4,
@@ -353,11 +354,9 @@ def score(
     """
     Calculate the Predictive Power Score (PPS) for "x predicts y"
     The score always ranges from 0 to 1 and is data-type agnostic.
-
     A score of 0 means that the column x cannot predict the column y better than a naive baseline model.
     A score of 1 means that the column x can perfectly predict the column y given the model.
     A score between 0 and 1 states the ratio of how much potential predictive power the model achieved compared to the baseline model.
-
     Parameters
     ----------
     df : pandas.DataFrame
@@ -379,13 +378,23 @@ def score(
         The score that is returned when a calculation is invalid, e.g. because the data type was not supported.
     catch_errors : bool
         If `True` all errors will be catched and reported as `unknown_error` which ensures convenience. If `False` errors will be raised. This is helpful for inspecting and debugging errors.
-
     Returns
     -------
     Dict
         A dict that contains multiple fields about the resulting PPS.
         The dict enables introspection into the calculations that have been performed under the hood
     """
+    global TIME_SERIES
+    if time_series: TIME_SERIES = True
+    else: TIME_SERIES = False
+    
+    global VALID_CALCULATIONS
+    if pipeline:
+        VALID_CALCULATIONS['regression']['model'] = Pipeline(pipeline + [('tree', tree.DecisionTreeRegressor())] )
+        VALID_CALCULATIONS['classification']['model'] = Pipeline( pipeline + [('tree', tree.DecisionTreeClassifier())] )
+    else:
+        VALID_CALCULATIONS['regression']['model'] = tree.DecisionTreeRegressor()
+        VALID_CALCULATIONS['classification']['model'] = tree.DecisionTreeClassifier()
 
     if not isinstance(df, pd.DataFrame):
         raise TypeError(
@@ -494,11 +503,10 @@ def _format_list_of_dicts(scores, output, sorted):
     return scores
 
 
-def predictors(df, y, output="df", sorted=True, **kwargs):
+def predictors(df, y, output="df", pipeline = [], time_series=False, sorted=True, **kwargs):
     """
     Calculate the Predictive Power Score (PPS) of all the features in the dataframe
     against a target column
-
     Parameters
     ----------
     df : pandas.DataFrame
@@ -509,16 +517,29 @@ def predictors(df, y, output="df", sorted=True, **kwargs):
         Control the type of the output. Either return a pandas.DataFrame (df) or a list with the score dicts
     sorted: bool
         Whether or not to sort the output dataframe/list by the ppscore
+    pipeline: list
+        list of transformstions to be included in the processing of the data
     kwargs:
         Other key-word arguments that shall be forwarded to the pps.score method,
         e.g. `sample, `cross_validation, `random_seed, `invalid_score`, `catch_errors`
-
     Returns
     -------
     pandas.DataFrame or list of Dict
         Either returns a tidy dataframe or a list of all the PPS dicts. This can be influenced
         by the output argument
     """
+    global TIME_SERIES
+    if time_series: TIME_SERIES = True
+    else: TIME_SERIES = False
+    
+    global VALID_CALCULATIONS
+    if not pipeline:
+        VALID_CALCULATIONS['regression']['model'] = Pipeline(pipeline + [('tree', tree.DecisionTreeRegressor())] )
+        VALID_CALCULATIONS['classification']['model'] = Pipeline(pipeline + [('tree', tree.DecisionTreeRegressor())] )
+    else:
+        VALID_CALCULATIONS['regression']['model'] = tree.DecisionTreeRegressor()
+        VALID_CALCULATIONS['classification']['model'] = tree.DecisionTreeClassifier()
+    
     if not isinstance(df, pd.DataFrame):
         raise TypeError(
             f"The 'df' argument should be a pandas.DataFrame but you passed a {type(df)}\nPlease convert your input to a pandas.DataFrame"
@@ -540,7 +561,7 @@ def predictors(df, y, output="df", sorted=True, **kwargs):
             f"""The 'sorted' argument should be one of [True, False] but you passed: {sorted}\nPlease adjust your input to one of the valid values"""
         )
 
-    scores = [score(df, column, y, **kwargs) for column in df if column != y]
+    scores = [score(df, column, y, pipeline, time_series, **kwargs) for column in df if column != y]
 
     return _format_list_of_dicts(scores=scores, output=output, sorted=sorted)
 
@@ -548,7 +569,6 @@ def predictors(df, y, output="df", sorted=True, **kwargs):
 def matrix(df, output="df", sorted=False, **kwargs):
     """
     Calculate the Predictive Power Score (PPS) matrix for all columns in the dataframe
-
     Parameters
     ----------
     df : pandas.DataFrame
@@ -560,7 +580,6 @@ def matrix(df, output="df", sorted=False, **kwargs):
     kwargs:
         Other key-word arguments that shall be forwarded to the pps.score method,
         e.g. `sample, `cross_validation, `random_seed, `invalid_score`, `catch_errors`
-
     Returns
     -------
     pandas.DataFrame or list of Dict
