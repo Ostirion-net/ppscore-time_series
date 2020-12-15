@@ -528,18 +528,7 @@ def predictors(df, y, output="df", pipeline = [], time_series=False, sorted=True
         Either returns a tidy dataframe or a list of all the PPS dicts. This can be influenced
         by the output argument
     """
-    global TIME_SERIES
-    if time_series: TIME_SERIES = True
-    else: TIME_SERIES = False
-    
-    global VALID_CALCULATIONS
-    if not pipeline:
-        VALID_CALCULATIONS['regression']['model'] = Pipeline(pipeline + [('tree', tree.DecisionTreeRegressor())] )
-        VALID_CALCULATIONS['classification']['model'] = Pipeline(pipeline + [('tree', tree.DecisionTreeRegressor())] )
-    else:
-        VALID_CALCULATIONS['regression']['model'] = tree.DecisionTreeRegressor()
-        VALID_CALCULATIONS['classification']['model'] = tree.DecisionTreeClassifier()
-    
+     
     if not isinstance(df, pd.DataFrame):
         raise TypeError(
             f"The 'df' argument should be a pandas.DataFrame but you passed a {type(df)}\nPlease convert your input to a pandas.DataFrame"
